@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
+const (
+	HelloModule = "hello"
+)
+
 type Module interface {
 	Name() string
 
 	Load(ctx context.Context) error
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
 	Close() error
 
 	Events() <-chan Event
