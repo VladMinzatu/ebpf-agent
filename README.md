@@ -1,5 +1,15 @@
 # ebpf-agent
 
+### Build
+```
+go generate ./... && go build
+```
+
+### Run
+```
+sudo ./ebpf-agent
+```
+
 ## Future development goals
 - develop modules (ebpf tracing programs) for all kinds of tracepoints, syscall, kernel functions, user functions, etc.
 - configuration (toggelable modules)
