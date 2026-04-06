@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/VladMinzatu/ebpf-agent/modules/hello"
@@ -10,8 +11,10 @@ import (
 func main() {
 	hm := hello.NewHelloModule(12345)
 	ctx := context.Background()
-	hm.Load(ctx)
+	if err := hm.Load(ctx); err != nil {
+		log.Fatalf("Failed to load BPF program. Err=%v", err)
+	}
 	defer hm.Close()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(50 * time.Second)
 }

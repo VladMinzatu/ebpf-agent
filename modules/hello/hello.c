@@ -17,14 +17,16 @@ struct {
     __type(value, u8);  // dummy (e.g. 1)
 } pid_filter SEC(".maps");
 
-SEC("tp/syscalls/sys_enter_write")
-int handle_tp(void *ctx)
+SEC("tracepoint/syscalls/sys_enter_write")
+int handle_tp(struct trace_event_raw_sys_enter *ctx)
 {
-    pid_t pid = bpf_get_current_pid_tgid() >> 32;
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+
     u8 *exists = bpf_map_lookup_elem(&pid_filter, &pid);
     if (!exists) {
-        return 0; // not in filter → ignore
+        return 0;
     }
-    bpf_printk("BPF triggered sys_enter_write from PID %d.\n", pid);
+
+    bpf_printk("write by pid=%d\n", pid);
     return 0;
 }

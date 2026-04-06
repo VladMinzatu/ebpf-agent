@@ -30,7 +30,7 @@ func (h *HelloModule) Load(ctx context.Context) error {
 	}
 
 	// Load targetPid in map
-	if err := h.objs.PidFilter.Put(h.targetPid, uint8(1)); err != nil {
+	if err := h.objs.PidFilter.Put(uint32(h.targetPid), uint8(1)); err != nil {
 		h.objs.Close()
 		return err
 	}
