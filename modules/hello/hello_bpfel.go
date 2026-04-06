@@ -61,13 +61,13 @@ type helloProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type helloMapSpecs struct {
+	PidFilter *ebpf.MapSpec `ebpf:"pid_filter"`
 }
 
 // helloVariableSpecs contains global variables before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type helloVariableSpecs struct {
-	PidFilter *ebpf.VariableSpec `ebpf:"pid_filter"`
 }
 
 // helloObjects contains all objects after they have been loaded into the kernel.
@@ -90,17 +90,19 @@ func (o *helloObjects) Close() error {
 //
 // It can be passed to loadHelloObjects or ebpf.CollectionSpec.LoadAndAssign.
 type helloMaps struct {
+	PidFilter *ebpf.Map `ebpf:"pid_filter"`
 }
 
 func (m *helloMaps) Close() error {
-	return _HelloClose()
+	return _HelloClose(
+		m.PidFilter,
+	)
 }
 
 // helloVariables contains all global variables after they have been loaded into the kernel.
 //
 // It can be passed to loadHelloObjects or ebpf.CollectionSpec.LoadAndAssign.
 type helloVariables struct {
-	PidFilter *ebpf.Variable `ebpf:"pid_filter"`
 }
 
 // helloPrograms contains all programs after they have been loaded into the kernel.

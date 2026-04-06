@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	hm := hello.HelloModule{}
+	hm := hello.NewHelloModule(12345)
 	ctx := context.Background()
 	hm.Load(ctx)
 	defer hm.Close()

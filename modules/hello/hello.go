@@ -9,8 +9,14 @@ import (
 )
 
 type HelloModule struct {
+	targetPid int
+
 	objs  helloObjects
 	links []link.Link
+}
+
+func NewHelloModule(targetPid int) *HelloModule {
+	return &HelloModule{targetPid: targetPid}
 }
 
 func (h *HelloModule) Name() string {
@@ -20,6 +26,12 @@ func (h *HelloModule) Name() string {
 func (h *HelloModule) Load(ctx context.Context) error {
 	// Load the BPF objects
 	if err := loadHelloObjects(&h.objs, nil); err != nil {
+		return err
+	}
+
+	// Load targetPid in map
+	if err := h.objs.PidFilter.Put(h.targetPid, uint8(1)); err != nil {
+		h.objs.Close()
 		return err
 	}
 

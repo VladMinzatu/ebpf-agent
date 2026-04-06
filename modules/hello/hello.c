@@ -7,16 +7,24 @@
 
 typedef unsigned int u32;
 typedef int pid_t;
-const pid_t pid_filter = 0;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, u32);   // PID
+    __type(value, u8);  // dummy (e.g. 1)
+} pid_filter SEC(".maps");
 
 SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
 {
     pid_t pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid_filter && pid != pid_filter)
-        return 0;
+    u8 *exists = bpf_map_lookup_elem(&pid_filter, &pid);
+    if (!exists) {
+        return 0; // not in filter → ignore
+    }
     bpf_printk("BPF triggered sys_enter_write from PID %d.\n", pid);
     return 0;
 }
