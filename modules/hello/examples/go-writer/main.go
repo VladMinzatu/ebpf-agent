@@ -16,7 +16,7 @@ func main() {
 	for t := range ticker.C {
 		msg := fmt.Sprintf("tick at %s (pid=%d)\n", t.Format(time.RFC3339Nano), pid)
 
-		_, err := os.Stdout.Write([]byte(msg))
+		_, err := os.Stdout.Write([]byte(msg)) // triggers the write syscall
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "write error: %v\n", err)
 		}
