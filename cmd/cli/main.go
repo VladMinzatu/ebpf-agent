@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/VladMinzatu/ebpf-agent/modules/hello"
+	"github.com/VladMinzatu/ebpf-agent/internal/modules/hello"
 )
 
 func main() {

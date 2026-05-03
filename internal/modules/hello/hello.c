@@ -1,7 +1,7 @@
 //go:build ignore
 
 #define BPF_NO_GLOBAL_DATA
-#include "../../bpf/vmlinux.h"
+#include "../bpf/vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 

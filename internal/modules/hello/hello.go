@@ -5,7 +5,7 @@ import (
 
 	"github.com/cilium/ebpf/link"
 
-	"github.com/VladMinzatu/ebpf-agent/pkg/module"
+	"github.com/VladMinzatu/ebpf-agent/internal/domain/module"
 )
 
 type HelloModule struct {

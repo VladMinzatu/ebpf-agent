@@ -1,8 +1,15 @@
 # ebpf-agent
 
+
 ### Build
+After initial checkout:
 ```
-go generate ./... && go build
+mkdir internal/infrastructure/bpf
+```
+
+
+```
+go generate ./... && go build -o ebpf-agent ./cmd/cli
 ```
 
 ### Run
