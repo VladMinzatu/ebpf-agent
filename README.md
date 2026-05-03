@@ -4,7 +4,7 @@
 ### Build
 After initial checkout:
 ```
-mkdir internal/infrastructure/bpf
+mkdir internal/modules/bpf
 ```
 
 
