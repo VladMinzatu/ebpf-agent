@@ -1,14 +1,34 @@
 # ebpf-agent
 
+An eBPF-based agent.
+
+## Requirements
+
+- Go 1.x
+- Linux (eBPF support)
+- Root privileges (for runtime)
 
 ### Build
 ```
 make build
 ```
 
-### Run
+Binary will be located at:
+
+```bash
+./bin/ebpf-agent
 ```
-sudo ./ebpf-agent
+
+## Run
+
+```bash
+make run
+```
+
+Or manually:
+
+```bash
+sudo ./bin/ebpf-agent
 ```
 
 ## Future development goals
