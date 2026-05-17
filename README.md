@@ -41,3 +41,24 @@ sudo ./bin/ebpf-agent
 - cgroup, containerisation handling
 - comparison of each module with BCC and bpftrace (doc)
 - packaging, deployment and runtime (docker, k8s)
+
+## vmlinux file generation
+
+```
+docker run --rm -it \
+  --privileged \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  debian:bookworm \
+  bash
+```
+
+inside the container:
+```
+apt-get update
+apt-get install -y bpftool
+```
+then
+```
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+```
