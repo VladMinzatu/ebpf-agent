@@ -2,6 +2,23 @@
 
 An eBPF-based agent.
 
+## Build and Run with Docker
+```
+docker build -t ebpf-agent .
+```
+
+Running on the host (of VM on Mac):
+```
+docker run --rm -it \
+  --privileged \
+  --pid=host \
+  --network=host \
+  -v /sys/kernel/debug:/sys/kernel/debug \
+  -v /sys/kernel/tracing:/sys/kernel/tracing \
+  -v /sys/fs/bpf:/sys/fs/bpf \
+  ebpf-agent
+```
+
 ## Requirements
 
 - Go 1.x

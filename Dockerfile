@@ -1,4 +1,7 @@
-FROM ubuntu:24.04
+# =========================
+# Buil stage
+# =========================
+FROM golang:1.26-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -12,10 +15,8 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libbpf-dev \
     linux-libc-dev \
-    iproute2 \
-    ca-certificates \
     build-essential \
-    golang-go
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -23,4 +24,21 @@ COPY . .
 
 RUN make build
 
-CMD ["./bin/ebpf-agent"]
+# =========================
+# Runtime stage
+# =========================
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    iproute2 \
+    libbpf1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/bin/ebpf-agent ./ebpf-agent
+
+CMD ["./ebpf-agent"]
