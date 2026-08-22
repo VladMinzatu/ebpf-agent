@@ -1,18 +1,44 @@
 package hello
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
+	"flag"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
 
-	"github.com/VladMinzatu/ebpf-agent/internal/domain/module"
+	"github.com/VladMinzatu/ebpf-agent/internal/agent"
 )
+
+const Name = "hello"
+
+func init() {
+	agent.Register(Name, func(args []string) (agent.Module, error) {
+		fs := flag.NewFlagSet(Name, flag.ContinueOnError)
+		targetPid := fs.Int("target-pid", 0, "PID to report sys_enter_write calls for")
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		if *targetPid <= 0 {
+			return nil, fmt.Errorf("-target-pid is required")
+		}
+		return NewHelloModule(*targetPid), nil
+	})
+}
 
 type HelloModule struct {
 	targetPid int
 
-	objs  helloObjects
-	links []link.Link
+	objs   helloObjects
+	links  []link.Link
+	reader *ringbuf.Reader
+	events chan agent.Event
 }
 
 func NewHelloModule(targetPid int) *HelloModule {
@@ -20,22 +46,19 @@ func NewHelloModule(targetPid int) *HelloModule {
 }
 
 func (h *HelloModule) Name() string {
-	return module.HelloModule
+	return Name
 }
 
 func (h *HelloModule) Load(ctx context.Context) error {
-	// Load the BPF objects
 	if err := loadHelloObjects(&h.objs, nil); err != nil {
 		return err
 	}
 
-	// Load targetPid in map
 	if err := h.objs.PidFilter.Put(uint32(h.targetPid), uint8(1)); err != nil {
 		h.objs.Close()
 		return err
 	}
 
-	// Attach program
 	tp, err := link.Tracepoint(
 		"syscalls",
 		"sys_enter_write",
@@ -46,19 +69,65 @@ func (h *HelloModule) Load(ctx context.Context) error {
 		h.objs.Close()
 		return err
 	}
-
 	h.links = append(h.links, tp)
+
+	rd, err := ringbuf.NewReader(h.objs.Events)
+	if err != nil {
+		h.Close()
+		return err
+	}
+	h.reader = rd
+	h.events = make(chan agent.Event)
+
+	go h.readLoop()
 
 	return nil
 }
 
+// readLoop forwards ring buffer records as agent.Events until the reader is
+// closed by Close, at which point it closes the events channel.
+func (h *HelloModule) readLoop() {
+	defer close(h.events)
+
+	var raw struct {
+		Pid  uint32
+		Comm [16]byte
+	}
+
+	for {
+		record, err := h.reader.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return
+			}
+			continue
+		}
+
+		if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &raw); err != nil {
+			continue
+		}
+
+		h.events <- agent.Event{
+			Module:    Name,
+			Timestamp: time.Now(),
+			Data: map[string]any{
+				"pid":  raw.Pid,
+				"comm": strings.TrimRight(string(raw.Comm[:]), "\x00"),
+			},
+		}
+	}
+}
+
 func (h *HelloModule) Close() error {
+	if h.reader != nil {
+		h.reader.Close()
+	}
 	for _, l := range h.links {
 		l.Close()
 	}
 	return h.objs.Close()
 }
 
-func (h *HelloModule) Events() <-chan module.Event {
-	return nil
+func (h *HelloModule) Events() <-chan agent.Event {
+	return h.events
 }

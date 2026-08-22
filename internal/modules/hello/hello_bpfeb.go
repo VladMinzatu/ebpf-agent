@@ -61,6 +61,7 @@ type helloProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type helloMapSpecs struct {
+	Events    *ebpf.MapSpec `ebpf:"events"`
 	PidFilter *ebpf.MapSpec `ebpf:"pid_filter"`
 }
 
@@ -90,11 +91,13 @@ func (o *helloObjects) Close() error {
 //
 // It can be passed to loadHelloObjects or ebpf.CollectionSpec.LoadAndAssign.
 type helloMaps struct {
+	Events    *ebpf.Map `ebpf:"events"`
 	PidFilter *ebpf.Map `ebpf:"pid_filter"`
 }
 
 func (m *helloMaps) Close() error {
 	return _HelloClose(
+		m.Events,
 		m.PidFilter,
 	)
 }

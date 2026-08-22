@@ -17,6 +17,16 @@ struct {
     __type(value, u8);  // dummy (e.g. 1)
 } pid_filter SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 12);
+} events SEC(".maps");
+
+struct event {
+    u32 pid;
+    char comm[16];
+};
+
 SEC("tracepoint/syscalls/sys_enter_write")
 int handle_tp(struct trace_event_raw_sys_enter *ctx)
 {
@@ -27,6 +37,14 @@ int handle_tp(struct trace_event_raw_sys_enter *ctx)
         return 0;
     }
 
-    bpf_printk("write by pid=%d\n", pid);
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (!e) {
+        return 0;
+    }
+
+    e->pid = pid;
+    bpf_get_current_comm(&e->comm, sizeof(e->comm));
+    bpf_ringbuf_submit(e, 0);
+
     return 0;
 }

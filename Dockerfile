@@ -41,4 +41,4 @@ WORKDIR /app
 
 COPY --from=builder /app/bin/ebpf-agent ./ebpf-agent
 
-CMD ["./ebpf-agent"]
+ENTRYPOINT ["./ebpf-agent"]
