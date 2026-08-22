@@ -82,7 +82,8 @@ docker run --rm -it \
 
 - Docker (build and run)
 - Linux host or VM (eBPF support) — on Mac/Windows this means Docker
-  Desktop's Linux VM
+  Desktop's Linux VM (see "Testing modules" below for a caveat about
+  PID-scoped modules on Docker Desktop specifically)
 - Root/`--privileged` at runtime
 
 ## Adding a module
@@ -98,6 +99,25 @@ docker run --rm -it \
    why, what a normal vs. interesting run looks like), give it a
    `README.md` — especially useful for linking a module back to whatever
    performance-lab investigation motivated it.
+
+## Testing modules
+
+Each module has an `examples/` subdirectory with one or more small,
+self-contained workloads that exercise it in a specific, reproducible way —
+see [`internal/modules/hello/examples/go-writer`](internal/modules/hello/examples/go-writer)
+for the pattern: a minimal program packaged as its own Docker image, plus a
+README describing what it does, how to run it, and what a real run should
+look like as observed by the module. Give each scenario its own
+subdirectory (`examples/<scenario>/`) — e.g. a module might eventually be
+worth testing against workloads in different languages, or against
+"normal" vs. "adversarial" patterns for a lab-specific investigation.
+
+The general recipe for a PID-scoped module:
+1. Run the target workload as its own container (`docker build` / `docker
+   run -d --name <name> ...`).
+2. Find its real PID: `docker inspect -f '{{.State.Pid}}' <name>`.
+3. Run the module against that PID: `make docker-run ARGS="<module>
+   -target-pid <pid>"`.
 
 ## vmlinux file generation
 

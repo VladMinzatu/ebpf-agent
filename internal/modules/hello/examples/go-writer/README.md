@@ -1,29 +1,46 @@
-# Example exercising hello module
+# Example exercising the hello module
 
-Simple go program that prints its pid and spams `sys_enter_write` so it can be picked up by our Hello module.
+A minimal Go program that prints its PID and spams the `write` syscall
+(via `os.Stdout.Write`) every 500ms. It's packaged as its own container so
+it has a container-visible PID to test `hello` against.
 
-Run:
+## Run it
+
 ```
-go run main.go
+docker build -t hello-go-writer .
+docker run -d --name hello-go-writer --pid=host hello-go-writer
+docker logs -f hello-go-writer
 ```
 
-Producing example output (pid will likely differ):
 ```
-Starting write spammer. PID=7355
-tick at 2026-04-06T13:49:46.437083309Z (pid=7355)
-tick at 2026-04-06T13:49:46.93704656Z (pid=7355)
-tick at 2026-04-06T13:49:47.437048143Z (pid=7355)
+Starting write spammer. PID=71564
+tick at 2026-08-22T10:03:06.528483652Z (pid=71564)
+tick at 2026-08-22T10:03:07.028484402Z (pid=71564)
+tick at 2026-08-22T10:03:07.528484068Z (pid=71564)
+tick at 2026-08-22T10:03:08.028484277Z (pid=71564)
 ...
 ```
 
-As this is running, we can start our agent that configures a HelloModule with this pid. And while both processes are running, we can check that the module's BPF program is loaded and doing its thing by checking:
+## Find its PID
+
 ```
-sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "write by pid"
+docker inspect -f '{{.State.Pid}}' hello-go-writer
 ```
 
-We should only see the lines relevant to our PID, firing every half a second.
+## Run hello against it
 
-If no output is observed, we may need to enable the tracing subsystem first:
+From the repo root:
 ```
-sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+make docker-run ARGS="hello -target-pid <pid>"
+```
+
+Expect one JSON line per write while both containers are up, e.g.:
+```json
+{"Module":"hello","Timestamp":"2026-08-22T09:44:10.361998Z","Data":{"comm":"writer","pid":62053}}
+```
+
+## Cleanup
+
+```
+docker rm -f hello-go-writer
 ```
