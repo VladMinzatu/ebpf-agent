@@ -61,8 +61,8 @@ type helloProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type helloMapSpecs struct {
-	Events    *ebpf.MapSpec `ebpf:"events"`
-	PidFilter *ebpf.MapSpec `ebpf:"pid_filter"`
+	Events       *ebpf.MapSpec `ebpf:"events"`
+	TargetCgroup *ebpf.MapSpec `ebpf:"target_cgroup"`
 }
 
 // helloVariableSpecs contains global variables before they are loaded into the kernel.
@@ -91,14 +91,14 @@ func (o *helloObjects) Close() error {
 //
 // It can be passed to loadHelloObjects or ebpf.CollectionSpec.LoadAndAssign.
 type helloMaps struct {
-	Events    *ebpf.Map `ebpf:"events"`
-	PidFilter *ebpf.Map `ebpf:"pid_filter"`
+	Events       *ebpf.Map `ebpf:"events"`
+	TargetCgroup *ebpf.Map `ebpf:"target_cgroup"`
 }
 
 func (m *helloMaps) Close() error {
 	return _HelloClose(
 		m.Events,
-		m.PidFilter,
+		m.TargetCgroup,
 	)
 }
 

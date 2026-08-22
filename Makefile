@@ -36,7 +36,7 @@ fmt:
 
 # Build and run via Docker (recommended: no local eBPF toolchain needed).
 # ARGS is "<module> [module flags]", e.g.
-#   make docker-run ARGS="hello -target-pid 12345"
+#   make docker-run ARGS="hello -container 4d7d4bab813f"
 .PHONY: docker-build
 docker-build:
 	docker build -t $(IMAGE) .
@@ -45,10 +45,10 @@ docker-build:
 docker-run:
 	docker run --rm -it \
 	  --privileged \
-	  --pid=host \
 	  --network=host \
 	  -v /sys/kernel/debug:/sys/kernel/debug \
 	  -v /sys/kernel/tracing:/sys/kernel/tracing \
 	  -v /sys/fs/bpf:/sys/fs/bpf \
+	  -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
 	  $(IMAGE) $(ARGS)
 

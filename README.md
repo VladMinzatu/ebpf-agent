@@ -1,6 +1,9 @@
 # ebpf-agent
 
-An eBPF-based agent. Currently meant for interactive sessions.
+An eBPF-based agent, currently meant for interactive sessions. The agent
+is container-native, works with cgroup targets and is not meant for
+non-containerized environments.
+
 It's built around a small `Module` abstraction: each
 module loads one or more eBPF programs, attaches them, streams out whatever
 it observes, and unloads cleanly on exit. The CLI runs exactly one module at
@@ -46,7 +49,7 @@ Run a module — it streams one JSON event per line to stdout until you stop
 it (Ctrl+C / SIGTERM), at which point it unloads its eBPF programs and
 exits:
 ```
-ebpf-agent hello -target-pid 12345
+ebpf-agent hello -container 4d7d4bab813f
 ```
 
 ## Build and Run with Docker
@@ -60,30 +63,32 @@ make docker-build
 ```
 
 Run a module (root/`--privileged` is required to load eBPF programs; the
-host `/sys` mounts give the container access to tracepoints and BPF
-filesystem):
+host `/sys` mounts give the container access to tracepoints, BPF
+filesystem, and the host's cgroups):
 ```
-make docker-run ARGS="hello -target-pid 12345"
+make docker-run ARGS="hello -container 4d7d4bab813f"
 ```
 
 Or without `make`:
 ```
 docker run --rm -it \
   --privileged \
-  --pid=host \
   --network=host \
   -v /sys/kernel/debug:/sys/kernel/debug \
   -v /sys/kernel/tracing:/sys/kernel/tracing \
   -v /sys/fs/bpf:/sys/fs/bpf \
-  ebpf-agent hello -target-pid 12345
+  -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+  ebpf-agent hello -container 4d7d4bab813f
 ```
 
 ## Requirements
 
 - Docker (build and run)
-- Linux host or VM (eBPF support) — on Mac/Windows this means Docker
-  Desktop's Linux VM (see "Testing modules" below for a caveat about
-  PID-scoped modules on Docker Desktop specifically)
+- Linux host or VM (eBPF support) — on Mac/Windows this means whatever
+  Linux VM your Docker setup runs on (Docker Desktop, OrbStack, etc.)
+- cgroup v2 (the unified hierarchy) on the host — this is how
+  container-targeting modules identify a container; see "Testing modules"
+  below
 - Root/`--privileged` at runtime
 
 ## Adding a module
@@ -112,12 +117,21 @@ subdirectory (`examples/<scenario>/`) — e.g. a module might eventually be
 worth testing against workloads in different languages, or against
 "normal" vs. "adversarial" patterns for a lab-specific investigation.
 
-The general recipe for a PID-scoped module:
+The general recipe:
 1. Run the target workload as its own container (`docker build` / `docker
    run -d --name <name> ...`).
-2. Find its real PID: `docker inspect -f '{{.State.Pid}}' <name>`.
-3. Run the module against that PID: `make docker-run ARGS="<module>
-   -target-pid <pid>"`.
+2. Get its container ID: `docker inspect -f '{{.Id}}' <name>` (a short
+   prefix, e.g. the first 12 characters, is normally enough).
+3. Run the module against it: `make docker-run ARGS="<module> -container
+   <id>"`.
+
+Modules that scope tracing to one specific container (like `hello`)
+identify it by cgroup ID rather than PID or process name — every
+container gets its own cgroup as a basic consequence of resource
+limiting, so this works the same way under Docker, containerd, CRI-O, or
+Kubernetes. See [`internal/agent/cgroup.go`](internal/agent/cgroup.go)
+for the resolution logic; any future container-scoped module should reuse
+`agent.CgroupID` rather than reinventing it.
 
 ## vmlinux file generation
 

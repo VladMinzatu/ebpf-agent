@@ -16,24 +16,27 @@ import (
 	"github.com/VladMinzatu/ebpf-agent/internal/agent"
 )
 
-const Name = "hello"
+const (
+	Name    = "hello"
+	commLen = 16 // TASK_COMM_LEN
+)
 
 func init() {
 	agent.Register(Name, func(args []string) (agent.Module, error) {
 		fs := flag.NewFlagSet(Name, flag.ContinueOnError)
-		targetPid := fs.Int("target-pid", 0, "PID to report sys_enter_write calls for")
+		containerID := fs.String("container", "", "container id (full, or a unique prefix) to report writes for")
 		if err := fs.Parse(args); err != nil {
 			return nil, err
 		}
-		if *targetPid <= 0 {
-			return nil, fmt.Errorf("-target-pid is required")
+		if *containerID == "" {
+			return nil, fmt.Errorf("-container is required")
 		}
-		return NewHelloModule(*targetPid), nil
+		return NewHelloModule(*containerID), nil
 	})
 }
 
 type HelloModule struct {
-	targetPid int
+	containerID string
 
 	objs   helloObjects
 	links  []link.Link
@@ -41,8 +44,8 @@ type HelloModule struct {
 	events chan agent.Event
 }
 
-func NewHelloModule(targetPid int) *HelloModule {
-	return &HelloModule{targetPid: targetPid}
+func NewHelloModule(containerID string) *HelloModule {
+	return &HelloModule{containerID: containerID}
 }
 
 func (h *HelloModule) Name() string {
@@ -50,11 +53,16 @@ func (h *HelloModule) Name() string {
 }
 
 func (h *HelloModule) Load(ctx context.Context) error {
+	cgroupID, err := agent.CgroupID(h.containerID)
+	if err != nil {
+		return fmt.Errorf("resolving container: %w", err)
+	}
+
 	if err := loadHelloObjects(&h.objs, nil); err != nil {
 		return err
 	}
 
-	if err := h.objs.PidFilter.Put(uint32(h.targetPid), uint8(1)); err != nil {
+	if err := h.objs.TargetCgroup.Put(uint32(0), cgroupID); err != nil {
 		h.objs.Close()
 		return err
 	}
@@ -91,7 +99,7 @@ func (h *HelloModule) readLoop() {
 
 	var raw struct {
 		Pid  uint32
-		Comm [16]byte
+		Comm [commLen]byte
 	}
 
 	for {

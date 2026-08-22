@@ -6,16 +6,19 @@
 #include <bpf/bpf_tracing.h>
 
 typedef unsigned int u32;
+typedef unsigned long long u64;
 typedef int pid_t;
+
+#define COMM_LEN 16
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 1024);
-    __type(key, u32);   // PID
-    __type(value, u8);  // dummy (e.g. 1)
-} pid_filter SEC(".maps");
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, u32);
+    __type(value, u64);
+} target_cgroup SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -24,16 +27,19 @@ struct {
 
 struct event {
     u32 pid;
-    char comm[16];
+    char comm[COMM_LEN];
 };
 
 SEC("tracepoint/syscalls/sys_enter_write")
 int handle_tp(struct trace_event_raw_sys_enter *ctx)
 {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    u32 key = 0;
+    u64 *target = bpf_map_lookup_elem(&target_cgroup, &key);
+    if (!target) {
+        return 0;
+    }
 
-    u8 *exists = bpf_map_lookup_elem(&pid_filter, &pid);
-    if (!exists) {
+    if (bpf_get_current_cgroup_id() != *target) {
         return 0;
     }
 
@@ -42,7 +48,7 @@ int handle_tp(struct trace_event_raw_sys_enter *ctx)
         return 0;
     }
 
-    e->pid = pid;
+    e->pid = bpf_get_current_pid_tgid() >> 32;
     bpf_get_current_comm(&e->comm, sizeof(e->comm));
     bpf_ringbuf_submit(e, 0);
 
