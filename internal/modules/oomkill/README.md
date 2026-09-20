@@ -24,5 +24,8 @@ ebpf-agent oomkill -container 4d7d4bab813f
 ```
 
 ```json
-{"Module":"oomkill","Timestamp":"2026-09-20T13:34:12.933187459Z","Data":{"comm":"stress","oom_score_adj":0,"pid":85822,"total_vm_pages":262144}}
+{"Module":"oomkill","Timestamp":"2026-09-20T14:18:37.042253502Z","Data":{"comm":"oom-eater","oom_score_adj":0,"pid":30012,"total_vm_pages":1291704}}
 ```
+
+See [`examples/oom-eater`](examples/oom-eater) for a runnable workload to
+test this against.
