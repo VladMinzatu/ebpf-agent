@@ -81,7 +81,7 @@ Once the eater gets OOM-killed, we get something like:
 [pid     8] 17:43:17.494338 <... epoll_pwait resumed>, [{events=EPOLLIN, data=0x3}], 1, -1, NULL, 0) = 1
 ```
 
-That's the reader's OS thread parked in `epoll_pwait` (timeout `-1` = block forever, since the module never sets a deadline) for the ~15s the eater took to get killed, then waking the instant `bpf_ringbuf_submit` in `oomkill.c` notifies it. 
+That's the reader's OS thread parked in `epoll_pwait` (timeout `-1` = block forever, since the module never sets a deadline) for the ~15s the eater took to get killed, then waking the instant `bpf_ringbuf_submit` in `oomkill.c` notifies it. Note that there is no `read()` following the wakeup - the record is already sitting in the mmap'd ring pages, so retrieving it is plain memory access, invisible to strace.
 
 (It's `epoll_pwait`, not `epoll_wait` - filtering on the latter catches nothing.)
 
