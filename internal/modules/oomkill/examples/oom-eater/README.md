@@ -58,8 +58,38 @@ Expect one JSON event once the kernel picks the eater as its OOM victim:
 {"Module":"oomkill","Timestamp":"2026-09-20T14:18:37.042253502Z","Data":{"comm":"oom-eater","oom_score_adj":0,"pid":30012,"total_vm_pages":1291704}}
 ```
 
+## Bonus: Deep dive into the reader mechanism
+
+`oomkill`'s reader blocks in `epoll_pwait` on the ringbuf map's fd until the kernel wakes it - it isn't polling. You can watch that block/wake cycle with `strace`, attached from a throwaway container sharing the agent's PID namespace.
+
+Run `oomkill` in its own terminal exactly as in "Run oomkill against it"
+above and leave it running. Then start the agent:
+```
+sudo make docker-run ARGS="oomkill -container <id>"
+```
+
+In another terminal, find that container (`make docker-run` doesn't name it, but it's the only one running the `ebpf-agent` image) and attach to it:
+```
+agent_cid=$(docker ps --filter ancestor=ebpf-agent --format '{{.ID}}')
+docker run --rm -it --pid=container:$agent_cid --cap-add=SYS_PTRACE alpine \
+  sh -c 'apk add --no-cache strace >/dev/null && strace -tt -f -e trace=epoll_pwait -p 1'
+```
+
+Once the eater gets OOM-killed, we get something like:
+```
+[pid     8] 17:43:02.590110 epoll_pwait(10 <unfinished ...>
+[pid     8] 17:43:17.494338 <... epoll_pwait resumed>, [{events=EPOLLIN, data=0x3}], 1, -1, NULL, 0) = 1
+```
+
+That's the reader's OS thread parked in `epoll_pwait` (timeout `-1` = block forever, since the module never sets a deadline) for the ~15s the eater took to get killed, then waking the instant `bpf_ringbuf_submit` in `oomkill.c` notifies it. 
+
+(It's `epoll_pwait`, not `epoll_wait` - filtering on the latter catches nothing.)
+
 ## Cleanup
 
 ```
 docker rm -f oomkill-eater
 ```
+
+(`make docker-run` and the `strace` container both run with `--rm`, so
+they clean up on their own once stopped.)
