@@ -17,6 +17,7 @@ import (
 	// Add new modules here as they're written.
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/hello"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/oomkill"
+	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/tcp"
 )
 
 func main() {
