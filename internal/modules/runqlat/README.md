@@ -71,15 +71,9 @@ Each event has:
 
 ## Example
 
-A single busy-looping thread in a container started with `--cpus=0.5`:
-
 ```
 ebpf-agent runqlat -container 3f1c0a9b27de -interval 2s
 ```
 
-```json
-{"Module":"runqlat","Timestamp":"2026-09-29T17:04:18.029785057Z","Data":{"avg_us":45310.40277272728,"buckets":[{"count":1,"max_us":31,"min_us":16},{"count":1,"max_us":127,"min_us":64},{"count":20,"max_us":65535,"min_us":32768}],"count":22,"cumulative":false,"interval_ms":2000}}
-```
-
-Twenty waits of 32-65ms per 2s: each 100ms period, the thread burns its
-50ms of quota, gets throttled, and waits roughly 50ms for the next period.
+See [`examples/cpu-burner`](examples/cpu-burner) for a runnable workload to
+test this against.
