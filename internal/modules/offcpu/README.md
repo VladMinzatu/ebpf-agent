@@ -16,8 +16,10 @@ time spent not wanting one.
 One program, on `tp_btf/sched_switch`:
 
 - **Switch-out**: if `prev` is going to sleep (`TASK_INTERRUPTIBLE` or
-  `TASK_UNINTERRUPTIBLE` - not preempted, not exiting) and is in the target
-  cgroup, record the time and capture its kernel and user stacks with
+  `TASK_UNINTERRUPTIBLE` - not exiting, and not preempted per the
+  tracepoint's `preempt` argument, since a thread preempted between setting
+  a sleeping state and calling `schedule()` never actually blocks) and is
+  in the target cgroup, record the time and capture its kernel and user stacks with
   `bpf_get_stackid()`. This has to happen here: stacks can only be captured
   for the current task, and at switch-out that's the one blocking.
 - **Switch-in**: if `next` has a recorded start, add the elapsed time to a

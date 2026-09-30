@@ -120,10 +120,17 @@ int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
 SEC("tp_btf/sched_switch")
 int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct task_struct *next)
 {
-    // prev being switched out while still TASK_RUNNING means it was
-    // preempted (or yielded): it goes straight back on a run queue, so its
-    // wait starts now. If it blocked instead, sched_wakeup starts it later.
-    if (task_state(prev) == TASK_RUNNING) {
+    // prev being preempted (or yielding) means it goes straight back on a
+    // run queue, so its wait starts now. If it blocked instead,
+    // sched_wakeup starts it later.
+    //
+    // The state alone doesn't tell these apart: a thread goes to sleep by
+    // setting its state (e.g. TASK_INTERRUPTIBLE) and then calling
+    // schedule(), and if it's preempted in between, it's switched out with
+    // a sleeping state but stays on the run queue - no sched_wakeup will
+    // follow. The preempt argument covers that case; the kernel's own
+    // sched_switch output reports it as runnable ("R+") too.
+    if (preempt || task_state(prev) == TASK_RUNNING) {
         mark_runnable(prev);
     }
 

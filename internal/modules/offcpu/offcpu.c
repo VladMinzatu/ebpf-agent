@@ -163,12 +163,17 @@ static __always_inline long task_state(struct task_struct *p)
 SEC("tp_btf/sched_switch")
 int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct task_struct *next)
 {
-    // Switch-out: only threads that are going to sleep. A thread switched
-    // out while still TASK_RUNNING was preempted - that wait is run queue
-    // latency (see the runqlat module), not blocking. Exiting threads
-    // (TASK_DEAD) never come back, so they're skipped too.
+    // Switch-out: only threads that are going to sleep. A preempted thread
+    // stays runnable - that wait is run queue latency (see the runqlat
+    // module), not blocking. Exiting threads (TASK_DEAD) never come back,
+    // so they're skipped too.
+    //
+    // A sleeping state alone isn't enough: a thread goes to sleep by
+    // setting its state and then calling schedule(), and if it's preempted
+    // in between, it's switched out with that state but never actually
+    // leaves the run queue. The preempt argument is what tells them apart.
     long state = task_state(prev);
-    if ((state & (TASK_INTERRUPTIBLE | TASK_UNINTERRUPTIBLE)) && in_target_cgroup()) {
+    if (!preempt && (state & (TASK_INTERRUPTIBLE | TASK_UNINTERRUPTIBLE)) && in_target_cgroup()) {
         struct start_info info = {};
         info.ts = bpf_ktime_get_ns();
         info.tgid = agent_tgid(prev);

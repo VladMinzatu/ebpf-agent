@@ -9,10 +9,13 @@ switched in:
 
 - `sched_wakeup` / `sched_wakeup_new` - a blocked (or brand new) thread was
   woken up.
-- `sched_switch`, for `prev` - a thread was switched out while still
-  `TASK_RUNNING`, i.e. preempted (time slice used up, a higher priority
-  thread woke, or its cgroup hit its CPU quota), so it goes straight back
-  to waiting.
+- `sched_switch`, for `prev` - a thread was preempted (time slice used up,
+  a higher priority thread woke, or its cgroup hit its CPU quota), so it
+  goes straight back to waiting. That's the tracepoint's `preempt` argument,
+  or a thread switched out while still `TASK_RUNNING` (e.g. a yield). The
+  state alone isn't enough: a thread preempted just after setting a
+  sleeping state, but before calling `schedule()`, has a sleeping state yet
+  never leaves the run queue, and no `sched_wakeup` follows.
 - `sched_switch`, for `next` - the wait ends; the latency goes into the
   histogram.
 
