@@ -7,11 +7,6 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_endian.h>
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef unsigned long long u64;
-
 #define COMM_LEN 16
 
 // Not in vmlinux.h - these are macros, and BTF only carries types.

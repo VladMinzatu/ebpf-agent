@@ -5,9 +5,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-typedef unsigned int u32;
-typedef unsigned long long u64;
-
 #define COMM_LEN 16
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

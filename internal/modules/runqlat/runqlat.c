@@ -6,10 +6,6 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 
-typedef unsigned int u32;
-typedef unsigned long long u64;
-typedef long long s64;
-
 // Log2 buckets of latency in microseconds: slot 0 is 0-1us, slot i is
 // [2^i, 2^(i+1)) us, and the last slot also absorbs anything longer
 // (2^26us is ~67s).
