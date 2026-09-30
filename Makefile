@@ -45,6 +45,7 @@ docker-build:
 docker-run:
 	docker run --rm -it \
 	  --privileged \
+	  --pid=host \
 	  --network=host \
 	  -v /sys/kernel/debug:/sys/kernel/debug \
 	  -v /sys/kernel/tracing:/sys/kernel/tracing \

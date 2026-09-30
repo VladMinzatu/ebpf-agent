@@ -64,7 +64,9 @@ make docker-build
 
 Run a module (root/`--privileged` is required to load eBPF programs; the
 host `/sys` mounts give the container access to tracepoints, BPF
-filesystem, and the host's cgroups):
+filesystem, and the host's cgroups; `--pid=host` lets modules that
+resolve user-space symbols, like `offcpu`, find traced processes in
+`/proc` by their host PIDs):
 ```
 make docker-run ARGS="hello -container 4d7d4bab813f"
 ```
@@ -73,6 +75,7 @@ Or without `make`:
 ```
 docker run --rm -it \
   --privileged \
+  --pid=host \
   --network=host \
   -v /sys/kernel/debug:/sys/kernel/debug \
   -v /sys/kernel/tracing:/sys/kernel/tracing \

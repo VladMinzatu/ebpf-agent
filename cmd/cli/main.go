@@ -16,6 +16,7 @@ import (
 	// Blank-imported so each module's init() registers it with the agent.
 	// Add new modules here as they're written.
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/hello"
+	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/offcpu"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/oomkill"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/runqlat"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/tcp"
