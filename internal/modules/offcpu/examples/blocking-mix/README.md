@@ -115,6 +115,64 @@ module doesn't look for separate debug symbols. The two at the root of
 every stack are where every thread starts, so they're presumably glibc's
 thread start-up code (`start_thread` and the `clone` entry point).
 
+
+## As a flame graph
+
+The `folded` field of each stack is in the format flame graph tools take.
+To get one interval into that format:
+
+1. Run the module as usual, with `-top 0` so every stack is included:
+   ```
+   sudo make docker-run ARGS="offcpu -container <id> -interval 10s -top 0"
+   ```
+2. Once an interval has been printed, copy one whole event line (it starts
+   with `{"Module":"offcpu"`) and save it as `event.json`.
+3. Turn it into folded stacks, one per line, weighted by off-CPU time:
+   ```
+   jq -r '.Data.stacks[] | "\(.folded) \(.total_us)"' event.json > offcpu.folded
+   ```
+
+`offcpu.folded` can be dropped into [speedscope](https://www.speedscope.app)
+or rendered with Brendan Gregg's `flamegraph.pl`:
+```
+flamegraph.pl --countname=us --title="Off-CPU" offcpu.folded > offcpu.svg
+```
+
+For one 10s interval of this workload:
+
+![Off-CPU flame graph of blocking-mix](offcpu.svg)
+
+Each box is a function, sitting on top of the function that called it: the
+thread name (`comm`) at the bottom, then user frames, then kernel frames up
+to `schedule`, where the thread left the CPU. A box's width is the
+off-CPU time of all the stacks passing through it - here 73s in total,
+since nine threads were each off-CPU for part of the 10s. Left-to-right
+order is alphabetical, not time. The colors don't mean anything; they just
+separate neighboring boxes. (Brendan Gregg's off-CPU flame graphs use
+`--colors=io` for a blue palette, to tell them apart from CPU profiles at a
+glance.)
+
+Reading it bottom-up gives the same picture as the stack listing above, at
+a glance:
+
+- `pool-worker` → `wait_for_job` → `pthread_cond_wait` is half the graph
+  (50%): idle threads waiting for work.
+- `contender` → `update_shared_state` → `__pthread_mutex_lock` is 24%: the
+  lock contention.
+- `dispatcher` → `usleep` is 13%, and `log-writer` → `flush_log` →
+  `fdatasync`, down through `ovl_fsync` and btrfs, is 12%.
+
+The towers of contention and idle waiting end in the same kernel frames
+(`__arm64_sys_futex` → `futex_wait` → `schedule`); they only split apart
+in user space. And a flame graph only shows totals: the contenders' 24%
+is thousands of waits of a few milliseconds, the pool's 50% around fifty
+long ones (one per job), and that difference is only in the event's
+`count`s.
+
+The SVG is interactive when opened directly in a browser (click a box to
+zoom in, Ctrl+F to search, hover for exact times); embedded in a README
+it's a static image.
+
 ## Cleanup
 
 ```
