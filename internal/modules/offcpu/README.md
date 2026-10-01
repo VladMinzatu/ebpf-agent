@@ -114,3 +114,13 @@ block again.
 - `-top <n>` - stacks to report per interval (default 20, 0 for all).
 - `-cumulative` - report totals since the module started instead of per
   interval.
+
+## Example
+
+```
+ebpf-agent offcpu -container 9b1f3c7e2a40 -interval 5s
+```
+
+See [`examples/blocking-mix`](examples/blocking-mix) for a runnable
+workload to test this against: threads that sit idle, contend on a lock,
+sleep on a timer and wait for disk I/O, each showing up as its own stack.
