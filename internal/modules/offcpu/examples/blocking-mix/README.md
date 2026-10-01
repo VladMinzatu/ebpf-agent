@@ -75,6 +75,46 @@ contender	D	count=1	20us
     K: schedule < io_schedule < bit_wait_io < __wait_on_bit < out_of_line_wait_on_bit < read_extent_buffer_pages < btrfs_read_extent_buffer < btrfs_search_slot < btrfs_lookup_file_extent < btrfs_get_extent < btrfs_do_readpage < btrfs_readahead < page_cache_ra_unbounded < page_cache_ra_order < filemap_fault < handle_mm_fault < do_mem_abort < el0_ia < el0t_64_sync_handler < el0t_64_sync
 ```
 
+What to notice:
+
+- **The biggest total isn't the problem.** The four idle pool workers
+  account for 20s of the 38s - each was off-CPU for nearly the whole
+  interval, which is exactly what an idle pool should do. Off-CPU time
+  measures waiting, not badness; most services are dominated by threads
+  waiting for work like this.
+- **Idle and contention look identical to the kernel.** Pool workers and
+  contenders are both in state `S`, with the same kernel stack
+  (`futex_wait`) - a condition variable and a contended mutex are both a
+  futex underneath. Only the user stacks tell them apart:
+  `pthread_cond_wait < wait_for_job` versus
+  `__pthread_mutex_lock < update_shared_state`. That's what stacks add over
+  per-thread totals.
+- **The shape differs too.** 25 waits averaging ~800ms (idle) versus 2456
+  waits averaging ~3.6ms (contention). Many short waits on a lock is the
+  signature of contention: here each contender spends ~60% of its time
+  waiting to get in.
+- **Disk I/O is `D`**, with the whole storage path in the kernel stack:
+  `fdatasync` on the container's root filesystem goes through overlayfs
+  (`ovl_fsync`) to the host's filesystem - btrfs, in OrbStack's VM - and
+  waits for the device to complete the write. The two `log-writer` stacks
+  are two different waits inside the same sync. On another host this part
+  looks different (e.g. ext4 and `jbd2`), and the fsync count and timing
+  depend on the disk.
+- **The timer sleep is the simplest stack**: 25 sleeps of 200ms, 5s total
+  - the dispatcher is off-CPU for the whole interval, as designed.
+- **Page faults block too.** The single `contender D` stack is a thread
+  touching a page of its own code that wasn't in memory yet
+  (`filemap_fault`), and waiting for it to be read from disk. It typically
+  shows up once, early on; it's not something the program does on
+  purpose, but it's a real source of off-CPU time - memory-mapped files,
+  and binaries after being paged out, hit the same path.
+
+`[libc+0x...]` frames are glibc functions that aren't exported:
+Ubuntu ships libc without its full symbol table (only `.dynsym`), and the
+module doesn't look for separate debug symbols. The two at the root of
+every stack are where every thread starts, so they're presumably glibc's
+thread start-up code (`start_thread` and the `clone` entry point).
+
 ## Cleanup
 
 ```
