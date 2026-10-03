@@ -6,8 +6,6 @@ package stacks
 import (
 	"slices"
 	"strings"
-
-	"github.com/cilium/ebpf"
 )
 
 // MaxDepth is MAX_STACK_DEPTH in stacks.h: PERF_MAX_STACK_DEPTH, the most
@@ -20,10 +18,17 @@ const MaxDepth = 127
 // that's no longer in the map.
 const Missing = "[missing]"
 
+// StackMap is the part of a BPF_MAP_TYPE_STACK_TRACE map's interface a
+// Resolver uses. *ebpf.Map implements it.
+type StackMap interface {
+	Lookup(key, valueOut any) error
+	Delete(key any) error
+}
+
 // Resolver resolves stack ids from a BPF_MAP_TYPE_STACK_TRACE map to
 // symbolized frames. It isn't safe for concurrent use.
 type Resolver struct {
-	stacks *ebpf.Map
+	stacks StackMap
 	kernel *KernelSymbols
 	user   *userSymbolizer
 }
@@ -35,7 +40,7 @@ type Resolver struct {
 // agent's own pid namespace (see agent_tgid() in pidns.h), so the agent
 // needs to share a pid namespace with the traced processes, e.g. by
 // running with --pid=host.
-func NewResolver(stacks *ebpf.Map, ksyms *KernelSymbols) *Resolver {
+func NewResolver(stacks StackMap, ksyms *KernelSymbols) *Resolver {
 	return &Resolver{stacks: stacks, kernel: ksyms, user: newUserSymbolizer()}
 }
 

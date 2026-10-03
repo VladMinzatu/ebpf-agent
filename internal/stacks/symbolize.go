@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"debug/elf"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -58,9 +59,12 @@ func LoadKernelSymbols() (*KernelSymbols, error) {
 		return nil, err
 	}
 	defer f.Close()
+	return parseKallsyms(f)
+}
 
+func parseKallsyms(r io.Reader) (*KernelSymbols, error) {
 	var t symbolTable
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(r)
 	for sc.Scan() {
 		// "<addr> <type> <name> [module]"
 		fields := strings.Fields(sc.Text())

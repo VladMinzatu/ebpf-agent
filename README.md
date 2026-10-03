@@ -70,6 +70,12 @@ headers) needed to compile modules, so you don't need it on the host.
 make docker-build
 ```
 
+Run the tests (in the builder stage, privileged so tests that create BPF
+maps don't skip):
+```
+make docker-test
+```
+
 Run a module (root/`--privileged` is required to load eBPF programs; the
 host `/sys` mounts give the container access to tracepoints, BPF
 filesystem, and the host's cgroups; `--pid=host` lets modules that

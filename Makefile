@@ -41,6 +41,14 @@ fmt:
 docker-build:
 	docker build -t $(IMAGE) .
 
+# Run the tests in the builder stage, which has the generated BPF objects
+# and builds on Linux. --privileged so tests that create BPF maps run
+# rather than skip.
+.PHONY: docker-test
+docker-test:
+	docker build --target builder -t $(IMAGE)-builder .
+	docker run --rm --privileged $(IMAGE)-builder go test ./...
+
 .PHONY: docker-run
 docker-run:
 	docker run --rm -it \
