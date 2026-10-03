@@ -5,11 +5,10 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include "../bpf/pidns.h"
+#include "../bpf/stacks.h"
 
 #define COMM_LEN 16
-
-// PERF_MAX_STACK_DEPTH, the most frames bpf_get_stackid() will capture.
-#define MAX_STACK_DEPTH 127
 
 // Kernel macros, so not in vmlinux.h.
 #define TASK_RUNNING 0
@@ -24,24 +23,6 @@ struct {
     __type(key, u32);
     __type(value, u64);
 } target_cgroup SEC(".maps");
-
-// Inode number of the agent's own pid namespace (/proc/self/ns/pid).
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __uint(max_entries, 1);
-    __type(key, u32);
-    __type(value, u64);
-} agent_pidns SEC(".maps");
-
-// Stack id -> the stack's instruction pointers, leaf first. Identical
-// stacks share an id, which is what makes aggregating by stack cheap:
-// the counts key only carries the two ids, not the frames.
-struct {
-    __uint(type, BPF_MAP_TYPE_STACK_TRACE);
-    __uint(max_entries, 16384);
-    __uint(key_size, sizeof(u32));
-    __uint(value_size, MAX_STACK_DEPTH * sizeof(u64));
-} stacks SEC(".maps");
 
 // What a thread was doing when it blocked, keyed by thread id. Captured at
 // switch-out because that's the only time the blocking thread is current,
@@ -99,50 +80,6 @@ static __always_inline int in_target_cgroup(void)
     u32 key = 0;
     u64 *target = bpf_map_lookup_elem(&target_cgroup, &key);
     return target && bpf_get_current_cgroup_id() == *target;
-}
-
-// How deep a pid namespace hierarchy agent_tgid() searches. The kernel
-// allows 32 levels; real setups use two or three (root, maybe a VM or
-// Docker-in-a-container level, then the container).
-#define MAX_PIDNS_LEVEL 8
-
-// Returns p's process id as seen from the agent's pid namespace, or 0 if
-// the process isn't visible there. bpf_get_current_pid_tgid() isn't enough:
-// it returns pids in the kernel's root namespace, which isn't necessarily
-// the agent's even with --pid=host (e.g. when Docker itself runs in a
-// container, as on OrbStack or kind), and userspace needs a pid it can find
-// in its own /proc to symbolize user stacks. (bpf_get_ns_current_pid_tgid()
-// doesn't help either: it only works for tasks that live directly in the
-// given namespace, and container processes live in a child of it.)
-//
-// A struct pid holds the process's number in every namespace from the root
-// down to its own: numbers[i] is its pid at level i. So this walks those
-// and returns the one whose namespace is the agent's.
-static __always_inline u32 agent_tgid(struct task_struct *p)
-{
-    u32 key = 0;
-    u64 *agent_ino = bpf_map_lookup_elem(&agent_pidns, &key);
-    if (!agent_ino) {
-        return 0;
-    }
-    struct pid *pid = BPF_CORE_READ(p, group_leader, thread_pid);
-    unsigned int level = BPF_CORE_READ(pid, level);
-    // numbers is a flexible array member, so only its start offset gets a
-    // CO-RE relocation; indexing is plain pointer arithmetic from there.
-    struct upid *numbers = &pid->numbers[0];
-    for (int i = 0; i < MAX_PIDNS_LEVEL; i++) {
-        if (i > level) {
-            break;
-        }
-        struct upid upid;
-        if (bpf_probe_read_kernel(&upid, sizeof(upid), numbers + i)) {
-            return 0;
-        }
-        if (BPF_CORE_READ(upid.ns, ns.inum) == *agent_ino) {
-            return upid.nr;
-        }
-    }
-    return 0;
 }
 
 // task_struct::state was renamed to __state (and changed type) in 5.14.

@@ -16,12 +16,20 @@ to unload and stop.
   interface, a name-based registry, the `Runner` that loads a module, fans
   its events into output sinks, and unloads it on shutdown, and the `Sink`
   interface (currently one implementation: newline-delimited JSON to
-  stdout).
+  stdout). It also has the helpers for locating containers and the agent
+  itself from the kernel's point of view: `CgroupID` and
+  `PidNamespaceInode`.
 - `internal/modules/<name>/` — one package per module. A module registers
   itself in an `init()`, owns its own `flag.FlagSet` for whatever params it
   needs, and contains its `.c` source plus the `bpf2go`-generated bindings.
-- `internal/modules/bpf/vmlinux.h` — shared kernel type definitions used by
-  CO-RE modules.
+- `internal/modules/bpf/` — shared BPF-side code: `vmlinux.h`, the kernel
+  type definitions used by CO-RE modules, plus headers for pieces several
+  modules use - `stacks.h` (the stack trace map) and `pidns.h` (pids as seen
+  from the agent's pid namespace).
+- `internal/stacks` — the Go side of `stacks.h`, for modules that aggregate
+  by stack trace: resolving stack ids to kernel and user symbols (via
+  `/proc/kallsyms`, and process memory maps plus ELF symbol tables), output
+  in flame graph format, and draining per-stack counts maps.
 - `cmd/cli` — the entry point. It only knows how to look up a module by name
   and run it; it has zero knowledge of any specific module's params.
 

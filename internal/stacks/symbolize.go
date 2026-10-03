@@ -1,4 +1,4 @@
-package offcpu
+package stacks
 
 import (
 	"bufio"
@@ -36,10 +36,23 @@ func (t symbolTable) sort() {
 	sort.Slice(t, func(i, j int) bool { return t[i].addr < t[j].addr })
 }
 
-// loadKallsyms reads the kernel's symbol table. /proc/kallsyms isn't
-// namespaced, so this works from inside the agent's container, but it shows
-// all-zero addresses unless the reader has CAP_SYSLOG (--privileged has it).
-func loadKallsyms() (symbolTable, error) {
+// KernelSymbols is the kernel's symbol table, from /proc/kallsyms. A nil
+// *KernelSymbols is valid and resolves nothing.
+type KernelSymbols struct {
+	syms symbolTable
+}
+
+func (k *KernelSymbols) lookup(addr uint64) (string, bool) {
+	if k == nil {
+		return "", false
+	}
+	return k.syms.lookup(addr)
+}
+
+// LoadKernelSymbols reads /proc/kallsyms. That file isn't namespaced, so
+// this works from inside the agent's container, but it shows all-zero
+// addresses unless the reader has CAP_SYSLOG (--privileged has it).
+func LoadKernelSymbols() (*KernelSymbols, error) {
 	f, err := os.Open("/proc/kallsyms")
 	if err != nil {
 		return nil, err
@@ -72,7 +85,7 @@ func loadKallsyms() (symbolTable, error) {
 		return nil, fmt.Errorf("no usable symbols in /proc/kallsyms (missing CAP_SYSLOG?)")
 	}
 	t.sort()
-	return t, nil
+	return &KernelSymbols{syms: t}, nil
 }
 
 type mapping struct {
