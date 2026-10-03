@@ -6,6 +6,7 @@ package stacks
 import (
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // MaxDepth is MAX_STACK_DEPTH in stacks.h: PERF_MAX_STACK_DEPTH, the most
@@ -13,10 +14,17 @@ import (
 const MaxDepth = 127
 
 // Missing is the single frame reported for a stack that couldn't be
-// captured (a negative stack id, e.g. -EFAULT for the user stack of a
-// kernel thread, or -EEXIST on a hash collision in the stacks map), or
-// that's no longer in the map.
+// captured (a negative stack id, e.g. -EEXIST on a hash collision in the
+// stacks map), or that's no longer in the map.
+//
+// -EFAULT is the exception: bpf_get_stackid() returns it when there's no
+// stack of that kind to capture - no kernel stack for a sample taken while
+// in user mode, no user stack for a kernel thread. Those are reported as
+// no frames at all.
 const Missing = "[missing]"
+
+// noStack is the stack id bpf_get_stackid() returns for an empty stack.
+const noStack = -int32(syscall.EFAULT)
 
 // StackMap is the part of a BPF_MAP_TYPE_STACK_TRACE map's interface a
 // Resolver uses. *ebpf.Map implements it.
@@ -54,6 +62,9 @@ func (r *Resolver) Refresh() {
 
 // KernelFrames returns a kernel stack's frames, leaf first.
 func (r *Resolver) KernelFrames(id int32) []string {
+	if id == noStack {
+		return []string{}
+	}
 	ips := r.ips(id)
 	if ips == nil {
 		return []string{Missing}
@@ -87,6 +98,9 @@ func isTracingFrame(name string) bool {
 
 // UserFrames returns process pid's user stack frames, leaf first.
 func (r *Resolver) UserFrames(pid uint32, id int32) []string {
+	if id == noStack {
+		return []string{}
+	}
 	ips := r.ips(id)
 	if ips == nil {
 		return []string{Missing}

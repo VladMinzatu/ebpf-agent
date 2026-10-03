@@ -145,6 +145,12 @@ func (s *userSymbolizer) lookup(pid uint32, addr uint64) string {
 	if m == nil {
 		return unknownFrame(addr)
 	}
+	if strings.HasPrefix(m.path, "[") {
+		// A kernel-provided mapping, e.g. [vdso], where clock_gettime and
+		// friends run without a syscall. There's no file to read symbols
+		// from, so the mapping's name is the frame.
+		return m.path
+	}
 
 	fileOff := addr - m.start + m.offset
 	f := s.file(pid, m.path)
@@ -210,7 +216,7 @@ func readELF(path string) (*elfFile, error) {
 	return f, nil
 }
 
-// readMaps returns pid's file-backed mappings.
+// readMaps returns pid's file-backed mappings, plus the vDSO.
 func readMaps(pid uint32) ([]mapping, error) {
 	f, err := os.Open(fmt.Sprintf("/proc/%d/maps", pid))
 	if err != nil {
@@ -223,8 +229,11 @@ func readMaps(pid uint32) ([]mapping, error) {
 	for sc.Scan() {
 		// "<start>-<end> <perms> <offset> <dev> <inode> <path>"
 		fields := strings.Fields(sc.Text())
-		if len(fields) < 6 || !strings.HasPrefix(fields[5], "/") {
-			continue // anonymous, [heap], [stack], [vdso], ...
+		if len(fields) < 6 {
+			continue // anonymous
+		}
+		if !strings.HasPrefix(fields[5], "/") && fields[5] != "[vdso]" {
+			continue // [heap], [stack], [vvar], ... - no code to find there
 		}
 		start, end, ok := strings.Cut(fields[0], "-")
 		if !ok {

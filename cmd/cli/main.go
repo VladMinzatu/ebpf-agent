@@ -18,6 +18,7 @@ import (
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/hello"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/offcpu"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/oomkill"
+	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/profile"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/runqlat"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/tcp"
 )

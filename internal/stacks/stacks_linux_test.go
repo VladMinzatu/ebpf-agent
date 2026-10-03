@@ -113,6 +113,26 @@ func TestUserFramesMappedWithoutSymbol(t *testing.T) {
 	}
 }
 
+// The vDSO has no file behind it; its addresses are reported by name.
+func TestUserFramesVDSO(t *testing.T) {
+	maps, err := readMaps(uint32(os.Getpid()))
+	if err != nil {
+		t.Fatalf("readMaps: %v", err)
+	}
+	i := slices.IndexFunc(maps, func(m mapping) bool { return m.path == "[vdso]" })
+	if i < 0 {
+		t.Skip("no [vdso] mapping")
+	}
+
+	m := &fakeStackMap{stacks: map[uint32][]uint64{1: {maps[i].start + 0x10}}}
+	r := NewResolver(m, nil)
+
+	want := []string{"[vdso]"}
+	if got := r.UserFrames(uint32(os.Getpid()), 1); !slices.Equal(got, want) {
+		t.Errorf("UserFrames() = %q, want %q", got, want)
+	}
+}
+
 func TestDrain(t *testing.T) {
 	type key struct {
 		Pid     uint32

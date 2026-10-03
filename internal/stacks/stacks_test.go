@@ -80,7 +80,8 @@ func TestKernelFrames(t *testing.T) {
 		{"strips leading tracing frames", 1, []string{"schedule", "futex_wait", "weak_func"}},
 		{"keeps tracing frames past the leaf", 2, []string{"schedule", "bpf_trace_run4"}},
 		{"unknown address", 3, []string{"schedule", "[unknown 0xffff700000000000]"}},
-		{"not captured", -14, []string{Missing}},
+		{"no kernel stack (sampled in user mode)", -14, []string{}},
+		{"not captured", -17, []string{Missing}},
 		{"not in map", 42, []string{Missing}},
 	}
 	for _, tt := range tests {
@@ -145,8 +146,11 @@ func TestUserFramesTrimsUnknownRoot(t *testing.T) {
 	if got := r.UserFrames(0, 1); !slices.Equal(got, want) {
 		t.Errorf("UserFrames(0, 1) = %q, want %q", got, want)
 	}
-	if got := r.UserFrames(0, -14); !slices.Equal(got, []string{Missing}) {
-		t.Errorf("UserFrames(0, -14) = %q, want %q", got, []string{Missing})
+	if got := r.UserFrames(0, -17); !slices.Equal(got, []string{Missing}) {
+		t.Errorf("UserFrames(0, -17) = %q, want %q", got, []string{Missing})
+	}
+	if got := r.UserFrames(0, -14); got == nil || len(got) != 0 {
+		t.Errorf("UserFrames(0, -14) = %#v, want no frames", got)
 	}
 }
 
