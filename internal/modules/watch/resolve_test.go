@@ -128,9 +128,9 @@ func TestResolveELF(t *testing.T) {
 		expr string
 		want Target
 	}{
-		{"main.counter", Target{Addr: counter, Size: 8, Type: "int64"}},
-		{"main.cfg.Limits.Timeout", Target{Addr: cfg + 16, Size: 8, Type: "time.Duration"}},
-		{"main.cfg.Limits.MaxConns", Target{Addr: cfg + 24, Size: 4, Type: "int32"}},
+		{"main.counter", Target{Addr: counter, Size: 8, Type: "int64", Signed: true}},
+		{"main.cfg.Limits.Timeout", Target{Addr: cfg + 16, Size: 8, Type: "time.Duration", Signed: true}},
+		{"main.cfg.Limits.MaxConns", Target{Addr: cfg + 24, Size: 4, Type: "int32", Signed: true}},
 		{"main.cfg.Limits.Enabled", Target{Addr: cfg + 28, Size: 1, Type: "bool"}},
 		{"main.cfg.Next", Target{Addr: cfg + 32, Size: 8, Type: "*main.Config"}},
 	}

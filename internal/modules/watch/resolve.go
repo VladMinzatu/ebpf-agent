@@ -16,9 +16,10 @@ const dwOpAddr = 0x03
 // Target is a resolved watch expression: where to put the breakpoint, and
 // how many bytes it covers.
 type Target struct {
-	Addr uint64
-	Size int64
-	Type string // the watched value's type, e.g. "int64"
+	Addr   uint64
+	Size   int64
+	Type   string // the watched value's type, e.g. "int64"
+	Signed bool   // whether the value is a signed integer
 }
 
 // Resolve resolves expr - a package-level variable, optionally followed by
@@ -74,7 +75,8 @@ func resolveELF(f *elf.File, expr string) (Target, error) {
 	if addr%uint64(size) != 0 {
 		return Target{}, fmt.Errorf("%s at %#x is not aligned to its size (%d)", expr, addr, size)
 	}
-	return Target{Addr: addr, Size: size, Type: typeName(typ)}, nil
+	_, signed := typ.(*dwarf.IntType)
+	return Target{Addr: addr, Size: size, Type: typeName(typ), Signed: signed}, nil
 }
 
 // parseExpr splits expr into the variable's full name (as DWARF has it,

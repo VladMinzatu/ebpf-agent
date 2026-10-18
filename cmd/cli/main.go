@@ -21,6 +21,7 @@ import (
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/profile"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/runqlat"
 	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/tcp"
+	_ "github.com/VladMinzatu/ebpf-agent/internal/modules/watch"
 )
 
 func main() {

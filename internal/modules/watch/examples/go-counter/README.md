@@ -52,14 +52,24 @@ the `pid=1` it prints from inside its own pid namespace. That's the one
 
 ## Run watch against it
 
-Not wired up yet: the module so far only resolves `-sym` to an address.
-Once it is, from the repo root:
+From the repo root (assuming `make docker-build` was run before):
 ```
 make docker-run ARGS="watch -container <id> -pid <pid> -sym main.counter"
 ```
 
-should print one event per write to `counter`: 1, 2, ... 9 from `tick()`,
-then 0 from `reset()`.
+Expect one JSON line per write to `counter`, from whichever thread the
+writing goroutine was on at the time:
+```json
+{"Module":"watch","Timestamp":"2026-10-18T09:10:13.64702271Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":9}}
+{"Module":"watch","Timestamp":"2026-10-18T09:10:14.643489385Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":10}}
+{"Module":"watch","Timestamp":"2026-10-18T09:10:14.643501134Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380872,"value":0}}
+{"Module":"watch","Timestamp":"2026-10-18T09:10:15.646950678Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":1}}
+```
+
+On arm64 (e.g. Docker on Apple Silicon), `value` is what the address held
+*before* the write: the watchpoint fires before the store executes. Above,
+`10` is `reset()` about to overwrite 10 with 0, and `0` is `tick()` about
+to write 1. On x86 it's the value after the write.
 
 ## Cleanup
 

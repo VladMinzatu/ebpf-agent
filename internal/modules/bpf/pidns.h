@@ -22,25 +22,24 @@ struct {
 // Docker-in-a-container level, then the container).
 #define MAX_PIDNS_LEVEL 8
 
-// Returns p's process id as seen from the agent's pid namespace, or 0 if
-// the process isn't visible there. bpf_get_current_pid_tgid() isn't enough:
-// it returns pids in the kernel's root namespace, which isn't necessarily
-// the agent's even with --pid=host (e.g. when Docker itself runs in a
-// container, as on OrbStack or kind). (bpf_get_ns_current_pid_tgid()
-// doesn't help either: it only works for tasks that live directly in the
-// given namespace, and container processes live in a child of it.)
+// Returns pid's number as seen from the agent's pid namespace, or 0 if it
+// isn't visible there. bpf_get_current_pid_tgid() isn't enough: it returns
+// pids in the kernel's root namespace, which isn't necessarily the agent's
+// even with --pid=host (e.g. when Docker itself runs in a container, as on
+// OrbStack or kind). (bpf_get_ns_current_pid_tgid() doesn't help either: it
+// only works for tasks that live directly in the given namespace, and
+// container processes live in a child of it.)
 //
-// A struct pid holds the process's number in every namespace from the root
+// A struct pid holds the task's number in every namespace from the root
 // down to its own: numbers[i] is its pid at level i. So this walks those
 // and returns the one whose namespace is the agent's.
-static __always_inline u32 agent_tgid(struct task_struct *p)
+static __always_inline u32 agent_pid_nr(struct pid *pid)
 {
     u32 key = 0;
     u64 *agent_ino = bpf_map_lookup_elem(&agent_pidns, &key);
     if (!agent_ino) {
         return 0;
     }
-    struct pid *pid = BPF_CORE_READ(p, group_leader, thread_pid);
     unsigned int level = BPF_CORE_READ(pid, level);
     // numbers is a flexible array member, so only its start offset gets a
     // CO-RE relocation; indexing is plain pointer arithmetic from there.
@@ -58,6 +57,20 @@ static __always_inline u32 agent_tgid(struct task_struct *p)
         }
     }
     return 0;
+}
+
+// Returns p's process id as seen from the agent's pid namespace, or 0 if
+// the process isn't visible there. See agent_pid_nr.
+static __always_inline u32 agent_tgid(struct task_struct *p)
+{
+    return agent_pid_nr(BPF_CORE_READ(p, group_leader, thread_pid));
+}
+
+// Returns p's thread id as seen from the agent's pid namespace, or 0 if
+// the thread isn't visible there. See agent_pid_nr.
+static __always_inline u32 agent_tid(struct task_struct *p)
+{
+    return agent_pid_nr(BPF_CORE_READ(p, thread_pid));
 }
 
 #endif
