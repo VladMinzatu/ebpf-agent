@@ -5,6 +5,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 )
@@ -12,6 +13,10 @@ import (
 // dwOpAddr is DW_OP_addr: a location expression made of this opcode
 // followed by the variable's address.
 const dwOpAddr = 0x03
+
+// atEntry is AT_ENTRY from <elf.h>: the aux vector entry with the runtime
+// address of the executable's entry point.
+const atEntry = 9
 
 // Target is a resolved watch expression: where to put the breakpoint, and
 // how many bytes it covers.
@@ -28,24 +33,74 @@ type Target struct {
 // The binary is read through /proc/<pid>/exe and needs its DWARF (i.e. not
 // built with -ldflags=-w).
 //
-// Only the simplest case is handled so far: a non-PIE binary, and a path
-// that's stored inline in the variable, with no pointers to follow.
+// Only the simplest case is handled so far: a variable in the executable
+// itself (not a shared library), and a path that's stored inline in it,
+// with no pointers to follow.
 func Resolve(pid uint32, expr string) (Target, error) {
 	f, err := elf.Open(fmt.Sprintf("/proc/%d/exe", pid))
 	if err != nil {
 		return Target{}, err
 	}
 	defer f.Close()
-	return resolveELF(f, expr)
+	t, err := resolveELF(f, expr)
+	if err != nil {
+		return Target{}, err
+	}
+	bias, err := loadBias(pid, f)
+	if err != nil {
+		return Target{}, err
+	}
+	// The bias is page-aligned, so t.Addr stays aligned to t.Size.
+	t.Addr += bias
+	return t, nil
 }
 
+// loadBias returns how far process pid's executable f was loaded from the
+// addresses it was linked at. That's 0 for a non-PIE executable, which is
+// always loaded at its link-time addresses. A PIE is linked as if at 0 and
+// loaded at a random base, which the entry point gives away: the aux vector
+// has its runtime address, the ELF header its link-time one. Unlike working
+// it out from /proc/<pid>/maps, that also holds for .bss, which isn't
+// mapped from the file.
+func loadBias(pid uint32, f *elf.File) (uint64, error) {
+	if f.Type == elf.ET_EXEC {
+		return 0, nil
+	}
+	auxv, err := os.ReadFile(fmt.Sprintf("/proc/%d/auxv", pid))
+	if err != nil {
+		return 0, err
+	}
+	entry, ok := auxvValue(auxv, f.ByteOrder, atEntry)
+	if !ok {
+		return 0, fmt.Errorf("no AT_ENTRY in /proc/%d/auxv", pid)
+	}
+	return entry - f.Entry, nil
+}
+
+// auxvValue returns the value of tag in auxv, the contents of a 64-bit
+// process's /proc/<pid>/auxv: (tag, value) pairs of u64s, ending with
+// AT_NULL (0).
+func auxvValue(auxv []byte, order binary.ByteOrder, tag uint64) (uint64, bool) {
+	for i := 0; i+16 <= len(auxv); i += 16 {
+		t := order.Uint64(auxv[i:])
+		if t == 0 {
+			break
+		}
+		if t == tag {
+			return order.Uint64(auxv[i+8:]), true
+		}
+	}
+	return 0, false
+}
+
+// resolveELF resolves expr in f, to its link-time address: what it is at
+// runtime minus the load bias.
 func resolveELF(f *elf.File, expr string) (Target, error) {
 	if f.Class != elf.ELFCLASS64 {
 		return Target{}, fmt.Errorf("only 64-bit binaries are supported")
 	}
-	if f.Type != elf.ET_EXEC {
-		// A PIE (ET_DYN) is loaded at a random base, which would need adding.
-		return Target{}, fmt.Errorf("PIE binaries are not supported yet")
+	if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
+		return Target{}, fmt.Errorf("not an executable (ELF type %s)", f.Type)
 	}
 	varName, fields, err := parseExpr(expr)
 	if err != nil {

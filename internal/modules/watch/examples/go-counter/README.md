@@ -36,8 +36,19 @@ counter=1
 ```
 
 The addresses depend on the Go version and the architecture, but they're
-the same on every run: the binary isn't PIE, so it isn't loaded at a random
-address.
+the same on every run: by default the binary isn't PIE, so it isn't loaded
+at a random address.
+
+To try `watch` on a PIE instead, which is loaded at a random address on
+every run (as most C, C++ and Rust binaries are today):
+```
+docker build --build-arg BUILDMODE=pie -t go-counter-pie .
+docker run -d --name go-counter-pie go-counter-pie
+```
+
+```
+go-counter: pid=1 &counter=0xaaaadc3409a8 &stats.Resets=0xaaaadc340bc8
+```
 
 ## Get its container ID and pid
 
@@ -74,5 +85,5 @@ to write 1. On x86 it's the value after the write.
 ## Cleanup
 
 ```
-docker rm -f go-counter
+docker rm -f go-counter go-counter-pie
 ```

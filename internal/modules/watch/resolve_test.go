@@ -2,6 +2,7 @@ package watch
 
 import (
 	"debug/elf"
+	"encoding/binary"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,10 +118,28 @@ func TestParseExpr(t *testing.T) {
 	}
 }
 
-// Resolves against a Linux binary, which can be cross-built anywhere, and
-// checks the addresses DWARF gives against the ELF symbol table.
+// The ways the target is built, for tests that should cover both: a
+// non-PIE executable (go build's default on Linux), and a PIE.
+var buildModes = []struct {
+	name  string
+	flags []string
+}{
+	{"exe", nil},
+	{"pie", []string{"-buildmode=pie"}},
+}
+
+// Resolves against Linux binaries, which can be cross-built anywhere, and
+// checks the addresses DWARF gives against the ELF symbol table. These are
+// link-time addresses: for a PIE, Resolve adds the load bias on top.
 func TestResolveELF(t *testing.T) {
-	f := openELF(t, buildTarget(t, "linux"))
+	for _, mode := range buildModes {
+		t.Run(mode.name, func(t *testing.T) {
+			testResolveELF(t, openELF(t, buildTarget(t, "linux", mode.flags...)))
+		})
+	}
+}
+
+func testResolveELF(t *testing.T, f *elf.File) {
 	counter := symbolValue(t, f, "main.counter")
 	cfg := symbolValue(t, f, "main.cfg")
 
@@ -159,21 +178,30 @@ func TestResolveELF(t *testing.T) {
 	}
 }
 
-func TestResolveELFRejects(t *testing.T) {
-	tests := []struct {
-		name    string
-		flags   []string
-		wantErr string
-	}{
-		{"pie", []string{"-buildmode=pie"}, "PIE"},
-		{"no dwarf", []string{"-ldflags=-w"}, "DWARF"},
+func TestResolveELFNoDWARF(t *testing.T) {
+	f := openELF(t, buildTarget(t, "linux", "-ldflags=-w"))
+	if _, err := resolveELF(f, "main.counter"); err == nil || !strings.Contains(err.Error(), "DWARF") {
+		t.Errorf("error = %v, want one about DWARF", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := openELF(t, buildTarget(t, "linux", tt.flags...))
-			if _, err := resolveELF(f, "main.counter"); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("error = %v, want one containing %q", err, tt.wantErr)
-			}
-		})
+}
+
+func TestAuxvValue(t *testing.T) {
+	var auxv []byte
+	for _, v := range []uint64{
+		6, 4096, // AT_PAGESZ
+		atEntry, 0xaaaad4c5e2a0,
+		0, 0, // AT_NULL
+		atEntry, 1, // past the end, ignored
+	} {
+		auxv = binary.LittleEndian.AppendUint64(auxv, v)
+	}
+	if got, ok := auxvValue(auxv, binary.LittleEndian, atEntry); !ok || got != 0xaaaad4c5e2a0 {
+		t.Errorf("auxvValue(AT_ENTRY) = %#x, %v; want 0xaaaad4c5e2a0, true", got, ok)
+	}
+	if _, ok := auxvValue(auxv, binary.LittleEndian, 3); ok { // AT_PHDR, not there
+		t.Error("auxvValue(AT_PHDR): want not found")
+	}
+	if _, ok := auxvValue(auxv[:20], binary.LittleEndian, atEntry); ok {
+		t.Error("auxvValue on a truncated auxv: want not found")
 	}
 }
