@@ -23,12 +23,17 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/VladMinzatu/ebpf-agent/internal/agent"
+	"github.com/VladMinzatu/ebpf-agent/internal/stacks"
 )
 
 const (
 	Name = "watch"
 
 	commLen = 16 // COMM_LEN in watch.c
+
+	// How often cached memory maps of the target are dropped, so that
+	// libraries it maps later get symbolized too.
+	mapsRefresh = 10 * time.Second
 )
 
 func init() {
@@ -61,10 +66,13 @@ type watchCfg struct {
 
 // event must match struct event in watch.c.
 type event struct {
-	Value uint64
-	Pid   uint32
-	Tid   uint32
-	Comm  [commLen]byte
+	Value         uint64
+	LR            uint64
+	Pid           uint32
+	Tid           uint32
+	Comm          [commLen]byte
+	UserStackSize int64
+	UserStack     [stacks.MaxDepth]uint64
 }
 
 type WatchModule struct {
@@ -72,11 +80,12 @@ type WatchModule struct {
 	pid         uint32
 	sym         string
 
-	target  Target
-	objs    watchObjects
-	perfFDs []int
-	links   []link.Link
-	reader  *ringbuf.Reader
+	target   Target
+	objs     watchObjects
+	perfFDs  []int
+	links    []link.Link
+	reader   *ringbuf.Reader
+	resolver *stacks.Resolver
 
 	events chan agent.Event
 	done   chan struct{}
@@ -142,6 +151,8 @@ func (w *WatchModule) Load(ctx context.Context) error {
 		w.links = append(w.links, l)
 	}
 
+	// Stacks come as instruction pointers in each record, so no stack map.
+	w.resolver = stacks.NewResolver(nil, nil)
 	w.reader, err = ringbuf.NewReader(w.objs.Events)
 	if err != nil {
 		w.Close()
@@ -179,6 +190,7 @@ func (w *WatchModule) readLoop() {
 	defer close(w.events)
 
 	var rec ringbuf.Record
+	lastRefresh := time.Now()
 	for {
 		if err := w.reader.ReadInto(&rec); err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
@@ -192,12 +204,17 @@ func (w *WatchModule) readLoop() {
 			log.Printf("%s: decoding event: %v", Name, err)
 			continue
 		}
+		if time.Since(lastRefresh) > mapsRefresh {
+			w.resolver.Refresh()
+			lastRefresh = time.Now()
+		}
 		data := map[string]any{
-			"pid":   e.Pid,
-			"tid":   e.Tid,
-			"comm":  strings.TrimRight(string(e.Comm[:]), "\x00"),
-			"addr":  fmt.Sprintf("%#x", w.target.Addr),
-			"value": w.value(e.Value),
+			"pid":        e.Pid,
+			"tid":        e.Tid,
+			"comm":       strings.TrimRight(string(e.Comm[:]), "\x00"),
+			"addr":       fmt.Sprintf("%#x", w.target.Addr),
+			"value":      w.value(e.Value),
+			"user_stack": w.userStack(&e),
 		}
 		select {
 		case w.events <- agent.Event{Module: Name, Timestamp: time.Now(), Data: data}:
@@ -205,6 +222,18 @@ func (w *WatchModule) readLoop() {
 			return
 		}
 	}
+}
+
+// userStack symbolizes an event's user stack, leaf first.
+func (w *WatchModule) userStack(e *event) []string {
+	if e.UserStackSize < 0 {
+		return []string{stacks.Missing}
+	}
+	frames := w.resolver.UserFramesFromIPs(e.Pid, e.UserStack[:e.UserStackSize/8])
+	if e.LR != 0 {
+		frames = insertCaller(frames, w.resolver.UserSymbol(e.Pid, e.LR))
+	}
+	return frames
 }
 
 // value converts the bytes read at the address to the watched type's

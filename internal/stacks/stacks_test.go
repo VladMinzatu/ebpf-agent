@@ -154,6 +154,19 @@ func TestUserFramesTrimsUnknownRoot(t *testing.T) {
 	}
 }
 
+// The same, for a stack given as instruction pointers: no stack map needed.
+func TestUserFramesFromIPs(t *testing.T) {
+	r := NewResolver(nil, nil)
+
+	want := []string{"[unknown 0x1000]"}
+	if got := r.UserFramesFromIPs(0, []uint64{0x1000, 0x2000, 0x3000}); !slices.Equal(got, want) {
+		t.Errorf("UserFramesFromIPs() = %q, want %q", got, want)
+	}
+	if got := r.UserSymbol(0, 0x2000); got != "[unknown 0x2000]" {
+		t.Errorf("UserSymbol() = %q, want %q", got, "[unknown 0x2000]")
+	}
+}
+
 func TestDelete(t *testing.T) {
 	m := &fakeStackMap{stacks: map[uint32][]uint64{5: {0x1000}}}
 	r := NewResolver(m, nil)

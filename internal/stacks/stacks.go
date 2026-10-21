@@ -42,7 +42,9 @@ type Resolver struct {
 }
 
 // NewResolver returns a Resolver for the given stack map. ksyms may be nil,
-// in which case kernel frames are reported as raw addresses.
+// in which case kernel frames are reported as raw addresses. stacks may be
+// nil too, for a Resolver that's only given instruction pointers
+// (UserFramesFromIPs, UserSymbol).
 //
 // User frames are resolved through /proc/<pid>, with pids as seen from the
 // agent's own pid namespace (see agent_tgid() in pidns.h), so the agent
@@ -105,11 +107,24 @@ func (r *Resolver) UserFrames(pid uint32, id int32) []string {
 	if ips == nil {
 		return []string{Missing}
 	}
+	return r.UserFramesFromIPs(pid, ips)
+}
+
+// UserFramesFromIPs is UserFrames for a stack that was captured as
+// instruction pointers (leaf first, e.g. by bpf_get_stack()) rather than
+// into the stack map.
+func (r *Resolver) UserFramesFromIPs(pid uint32, ips []uint64) []string {
 	frames := make([]string, len(ips))
 	for i, ip := range ips {
-		frames[i] = r.user.lookup(pid, ip)
+		frames[i] = r.UserSymbol(pid, ip)
 	}
 	return trimUserFrames(frames)
+}
+
+// UserSymbol returns the frame for a single address in process pid: the
+// function it's in, as in UserFrames.
+func (r *Resolver) UserSymbol(pid uint32, addr uint64) string {
+	return r.user.lookup(pid, addr)
 }
 
 // trimUserFrames drops frames at the root end of a user stack that aren't

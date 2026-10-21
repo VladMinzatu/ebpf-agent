@@ -69,18 +69,23 @@ make docker-run ARGS="watch -container <id> -pid <pid> -sym main.counter"
 ```
 
 Expect one JSON line per write to `counter`, from whichever thread the
-writing goroutine was on at the time:
+writing goroutine was on at the time, with the stack that made the write
+(timestamps left out):
 ```json
-{"Module":"watch","Timestamp":"2026-10-18T09:10:13.64702271Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":9}}
-{"Module":"watch","Timestamp":"2026-10-18T09:10:14.643489385Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":10}}
-{"Module":"watch","Timestamp":"2026-10-18T09:10:14.643501134Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380872,"value":0}}
-{"Module":"watch","Timestamp":"2026-10-18T09:10:15.646950678Z","Data":{"addr":"0x1b0988","comm":"go-counter","pid":380872,"tid":380885,"value":1}}
+{"Module":"watch","Data":{"addr":"0x1b0988","comm":"go-counter","pid":401366,"tid":401366,"user_stack":["main.tick","main.main","runtime.main","runtime.goexit.abi0"],"value":8}}
+{"Module":"watch","Data":{"addr":"0x1b0988","comm":"go-counter","pid":401366,"tid":401381,"user_stack":["main.reset","main.main.func1","runtime.goexit.abi0"],"value":9}}
+{"Module":"watch","Data":{"addr":"0x1b0988","comm":"go-counter","pid":401366,"tid":401366,"user_stack":["main.tick","main.main","runtime.main","runtime.goexit.abi0"],"value":0}}
+{"Module":"watch","Data":{"addr":"0x1b0988","comm":"go-counter","pid":401366,"tid":401383,"user_stack":["main.tick","main.main","runtime.main","runtime.goexit.abi0"],"value":1}}
 ```
+
+The two writers are told apart by their stacks: `tick()`, called from
+`main`, and `reset()`, called from the goroutine started in `main`
+(`main.main.func1`).
 
 On arm64 (e.g. Docker on Apple Silicon), `value` is what the address held
 *before* the write: the watchpoint fires before the store executes. Above,
-`10` is `reset()` about to overwrite 10 with 0, and `0` is `tick()` about
-to write 1. On x86 it's the value after the write.
+`9` is `reset()` about to overwrite 9 with 0, and `0` is `tick()` about to
+write 1. On x86 it's the value after the write.
 
 ## Cleanup
 
